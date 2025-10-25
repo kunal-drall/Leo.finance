@@ -3,12 +3,18 @@
 import { EvmPriceServiceConnection } from "@pythnetwork/pyth-evm-js";
 
 /**
- * Pyth Oracle Configuration
- * Real-time price feeds for PYUSD and other assets
+ * Pyth Oracle Configuration - Pull Oracle Method
+ *
+ * Pyth uses a "pull" model where you:
+ * 1. Fetch price updates from Hermes API
+ * 2. Submit updates to on-chain Pyth contract via updatePriceFeeds()
+ * 3. Read the updated price from the contract
+ *
+ * Documentation: https://docs.pyth.network/price-feeds/fetch-price-updates
+ * Price Feed IDs: https://pyth.network/developers/price-feed-ids
  */
 
 // Pyth Network price feed IDs
-// Full list: https://pyth.network/developers/price-feed-ids
 export const PRICE_FEED_IDS = {
   // PYUSD/USD price feed
   // Note: PYUSD price feed may not be available yet on Pyth
@@ -24,14 +30,54 @@ export const PRICE_FEED_IDS = {
 } as const;
 
 /**
- * Initialize Pyth Price Service Connection
+ * Hermes API endpoint
+ * Hermes is Pyth's price service that provides price updates
+ */
+export const HERMES_ENDPOINT = "https://hermes.pyth.network";
+
+/**
+ * Create Pyth connection to Hermes
+ * This client fetches price updates from Hermes API
  */
 export function createPythConnection() {
-  return new EvmPriceServiceConnection("https://hermes.pyth.network");
+  return new EvmPriceServiceConnection(HERMES_ENDPOINT, {
+    priceFeedRequestConfig: {
+      // Request binary price updates for on-chain submission
+      binary: true,
+    },
+  });
 }
 
 /**
- * Get latest price for a feed
+ * Fetch latest price updates from Hermes (Step 1 of Pull Oracle)
+ *
+ * This fetches the price update data that can be submitted on-chain.
+ * The returned data includes cryptographic proofs that validate the price.
+ *
+ * @param priceIds - Array of price feed IDs to fetch
+ * @returns Price update data with proofs (hex-encoded)
+ */
+export async function fetchPriceUpdates(priceIds: string[]): Promise<string[]> {
+  try {
+    const connection = createPythConnection();
+
+    // Get the latest price updates with proofs
+    const priceUpdateData = await connection.getPriceFeedsUpdateData(priceIds);
+
+    return priceUpdateData;
+  } catch (error) {
+    console.error("Failed to fetch price updates from Hermes:", error);
+    throw error;
+  }
+}
+
+/**
+ * Get latest price from Hermes for display purposes
+ *
+ * Note: This is for display only. For on-chain usage, you must:
+ * 1. Call fetchPriceUpdates() to get update data
+ * 2. Submit to contract via updatePriceFeeds()
+ * 3. Read from contract
  */
 export async function getLatestPrice(priceId: string) {
   try {
@@ -61,6 +107,44 @@ export async function getLatestPrice(priceId: string) {
 }
 
 /**
+ * Subscribe to real-time price updates via Server-Sent Events (SSE)
+ *
+ * Hermes provides a streaming endpoint that continuously pushes updates.
+ * Connection auto-closes after 24 hours; implement reconnection logic.
+ *
+ * @param priceIds - Array of price feed IDs to stream
+ * @param callback - Function called with each new price update
+ * @returns Unsubscribe function
+ */
+export function subscribeToPriceUpdates(
+  priceIds: string[],
+  callback: (price: {
+    priceId: string;
+    price: number;
+    conf: number;
+    publishTime: number;
+  }) => void
+) {
+  const connection = createPythConnection();
+
+  // Subscribe to price feed updates via SSE
+  connection.subscribePriceFeedUpdates(priceIds, (priceFeed) => {
+    const price = priceFeed.getPriceUnchecked();
+    callback({
+      priceId: priceFeed.id,
+      price: Number(price.price) * Math.pow(10, price.expo),
+      conf: Number(price.conf) * Math.pow(10, price.expo),
+      publishTime: price.publishTime,
+    });
+  });
+
+  // Return unsubscribe function
+  return () => {
+    connection.closeWebSocket();
+  };
+}
+
+/**
  * Format price for display
  */
 export function formatPythPrice(price: number, decimals: number = 2): string {
@@ -74,11 +158,13 @@ export function formatPythPrice(price: number, decimals: number = 2): string {
 
 /**
  * Get PYUSD price in USD
+ *
+ * PYUSD is a stablecoin pegged 1:1 to USD, so it should always be ~$1.00
  */
 export async function getPYUSDPrice() {
   try {
     // For now, return 1.0 as PYUSD is pegged to USD
-    // In production, use actual Pyth price feed
+    // In production, use actual Pyth price feed when available
     return {
       price: 1.0,
       conf: 0.001,
@@ -99,7 +185,7 @@ export async function getPYUSDPrice() {
 }
 
 /**
- * Get ETH price in USD
+ * Get ETH price in USD from Pyth
  */
 export async function getETHPrice() {
   try {
@@ -111,26 +197,37 @@ export async function getETHPrice() {
 }
 
 /**
- * Subscribe to price updates
+ * Get BTC price in USD from Pyth
  */
-export function subscribeToPriceUpdates(
-  priceId: string,
-  callback: (price: { price: number; conf: number; publishTime: number }) => void
-) {
-  const connection = createPythConnection();
+export async function getBTCPrice() {
+  try {
+    return await getLatestPrice(PRICE_FEED_IDS.BTC_USD);
+  } catch (error) {
+    console.error("Failed to get BTC price:", error);
+    throw error;
+  }
+}
 
-  // Subscribe to price updates
-  connection.subscribePriceFeedUpdates([priceId], (priceFeed) => {
-    const price = priceFeed.getPriceUnchecked();
-    callback({
-      price: Number(price.price) * Math.pow(10, price.expo),
-      conf: Number(price.conf) * Math.pow(10, price.expo),
-      publishTime: price.publishTime,
+/**
+ * Fetch price updates for multiple feeds
+ * Useful for batch operations
+ */
+export async function fetchMultiplePriceUpdates(priceIds: string[]) {
+  try {
+    const connection = createPythConnection();
+    const priceFeeds = await connection.getLatestPriceFeeds(priceIds);
+
+    return priceFeeds.map(feed => {
+      const price = feed.getPriceUnchecked();
+      return {
+        id: feed.id,
+        price: Number(price.price) * Math.pow(10, price.expo),
+        conf: Number(price.conf) * Math.pow(10, price.expo),
+        publishTime: price.publishTime,
+      };
     });
-  });
-
-  // Return unsubscribe function
-  return () => {
-    connection.closeWebSocket();
-  };
+  } catch (error) {
+    console.error("Failed to fetch multiple price updates:", error);
+    throw error;
+  }
 }
