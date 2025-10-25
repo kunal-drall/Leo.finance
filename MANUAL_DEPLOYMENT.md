@@ -4,6 +4,17 @@
 
 Your deployment environment is **already configured**! The credentials are stored in `contracts/.env`.
 
+### PYUSD Integration
+
+Leo Finance uses **PayPal USD (PYUSD)** as the payment token for all circles. Circles are created with the PYUSD contract address, and all contributions must be made in PYUSD.
+
+**PYUSD Contract Addresses:**
+- **Ethereum Mainnet**: `0x6c3ea9036406852006290770BEdFcAbA0e23A0e8`
+- **Ethereum Sepolia**: `0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9`
+- **Base Sepolia**: Uses Sepolia PYUSD for testing
+
+See `PYUSD_INTEGRATION.md` for complete details on how PYUSD works in Leo Finance.
+
 ### Quick Start (5 minutes)
 
 ```bash
