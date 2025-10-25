@@ -78,7 +78,7 @@ export function useETHPrice() {
 
         // Subscribe to updates
         unsubscribe = subscribeToPriceUpdates(
-          PRICE_FEED_IDS.ETH_USD,
+          [PRICE_FEED_IDS.ETH_USD],
           (update) => {
             setPriceData(update);
           }
