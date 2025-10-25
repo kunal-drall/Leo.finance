@@ -103,10 +103,26 @@ export const leoCoreABI = [
 ] as const;
 
 /**
- * LeoCore Contract Address (replace with deployed address)
+ * LeoCore Contract Address
+ *
+ * DEPLOYMENT INSTRUCTIONS:
+ * 1. Run: cd contracts && npx hardhat run scripts/deploy.ts --network baseSepolia
+ * 2. Copy the deployed address from console output
+ * 3. Replace the baseSepolia address below
+ * 4. Commit and push the change
+ *
+ * Your deployment credentials are configured in contracts/.env
  */
 export const LEO_CORE_ADDRESS = {
+  // Ethereum Sepolia Testnet
   sepolia: "0x0000000000000000000000000000000000000000",
-  baseSepolia: "0x0000000000000000000000000000000000000000",
-  localhost: "0x5FbDB2315678afecb367f032d93F642f64180aa3", // Hardhat default
+
+  // Base Sepolia Testnet (DEPLOY HERE)
+  baseSepolia: "0x0000000000000000000000000000000000000000", // TODO: Replace with deployed address
+
+  // Base Mainnet (Production)
+  base: "0x0000000000000000000000000000000000000000",
+
+  // Local Hardhat Network
+  localhost: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
 } as const;
