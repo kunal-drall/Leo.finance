@@ -3,6 +3,7 @@ import "./globals.css";
 import { Web3Providers } from "@/components/layout/providers";
 import { Header } from "@/components/layout/header";
 import { BottomNav } from "@/components/mobile/bottom-nav";
+import { ToastProvider } from "@/components/ui/toast";
 
 export const metadata: Metadata = {
   title: "Leo Finance - Decentralized Savings Circles",
@@ -37,11 +38,13 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body>
         <Web3Providers>
-          <div className="flex min-h-screen flex-col">
-            <Header />
-            <main className="flex-1 pb-16 md:pb-0">{children}</main>
-            <BottomNav />
-          </div>
+          <ToastProvider>
+            <div className="flex min-h-screen flex-col">
+              <Header />
+              <main className="flex-1 pb-16 md:pb-0">{children}</main>
+              <BottomNav />
+            </div>
+          </ToastProvider>
         </Web3Providers>
       </body>
     </html>
