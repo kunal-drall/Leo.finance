@@ -8,14 +8,18 @@ import { EvmPriceServiceConnection } from "@pythnetwork/pyth-evm-js";
  */
 
 // Pyth Network price feed IDs
+// Full list: https://pyth.network/developers/price-feed-ids
 export const PRICE_FEED_IDS = {
   // PYUSD/USD price feed
-  PYUSD_USD: "0x" + "0".repeat(64), // Replace with actual Pyth price feed ID
+  // Note: PYUSD price feed may not be available yet on Pyth
+  // Using placeholder - update when official feed ID is available
+  // For now, PYUSD is assumed to be pegged at 1.0 USD
+  PYUSD_USD: "0x" + "0".repeat(64), // TODO: Replace with actual Pyth price feed ID
 
-  // ETH/USD price feed
+  // ETH/USD price feed (verified)
   ETH_USD: "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace",
 
-  // BTC/USD price feed (example)
+  // BTC/USD price feed (verified)
   BTC_USD: "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
 } as const;
 

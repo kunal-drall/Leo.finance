@@ -127,13 +127,20 @@ npx hardhat run scripts/deploy.ts --network localhost
 - [x] Core smart contracts (LeoCore, LeoCircle)
 - [x] Navigation (header + bottom nav)
 
-### Phase 2: Integration (In Progress)
-- [ ] Circle creation flow
+### Phase 2: Core Integration ✅
+- [x] Circle creation flow with PYUSD
+- [x] PYUSD payment token integration
+- [x] ERC20 approval flow for contributions
+- [x] Token balance checks and validation
+- [x] Contribution flow UI with approval
 - [ ] Join existing circles
 - [ ] Dashboard with user circles
-- [ ] PYUSD integration
-- [ ] Yellow Network SDK integration
-- [ ] Pyth Oracle price feeds
+
+### Phase 3: Advanced Integration (In Progress)
+- [x] Pyth Oracle price feeds (ETH/USD)
+- [ ] PYUSD/USD price feed (when available)
+- [ ] Yellow Network SDK integration (waiting for launch)
+- [ ] Gasless transactions via Yellow Network
 
 ### Phase 3: Advanced Features
 - [ ] Trust scoring system
@@ -161,21 +168,50 @@ Individual ROSCA circle:
 
 States: `Pending → Active → Completed`
 
+## PYUSD Integration
+
+Leo Finance uses **PayPal USD (PYUSD)** as the primary payment token for all savings circles.
+
+### Why PYUSD?
+
+- **Stable Value**: Pegged 1:1 to USD
+- **Low Volatility**: No price fluctuations
+- **Regulatory Compliance**: Issued by regulated entity (Paxos)
+- **Wide Adoption**: Supported by major exchanges and wallets
+- **ERC-20 Standard**: Compatible with all Ethereum infrastructure
+
+### How It Works
+
+**Two-Step Payment Flow:**
+
+1. **Approve**: Grant the circle contract permission to spend your PYUSD
+2. **Contribute**: Transfer PYUSD to the circle
+
+This is handled automatically by our UI - you'll see clear prompts for each step.
+
+**Contract Addresses:**
+- **Ethereum Mainnet**: `0x6c3ea9036406852006290770BEdFcAbA0e23A0e8`
+- **Ethereum Sepolia**: `0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9`
+
+📖 **Full Documentation**: See [PYUSD_INTEGRATION.md](./PYUSD_INTEGRATION.md)
+
 ## How It Works
 
 ### Creating a Circle
 1. Connect your wallet
-2. Set contribution amount and frequency
+2. Set contribution amount and frequency (in PYUSD)
 3. Define number of members
-4. Share circle invitation
-5. Start circle when ready
+4. Approve PYUSD spending
+5. Share circle invitation
+6. Start circle when ready
 
-### Joining a Circle
+### Joining & Contributing to a Circle
 1. Connect your wallet
 2. Browse available circles
 3. Join circle
-4. Make contributions when due
-5. Receive payout when it's your turn
+4. **Approve PYUSD** for contributions (one-time)
+5. **Contribute PYUSD** when due
+6. Receive payout when it's your turn
 
 ### ROSCA Model
 - Members contribute fixed amount each period
