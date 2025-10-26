@@ -1,7 +1,5 @@
 "use client";
 
-import { EvmPriceServiceConnection } from "@pythnetwork/pyth-evm-js";
-
 /**
  * Pyth Oracle Configuration - Pull Oracle Method
  *
@@ -35,17 +33,25 @@ export const PRICE_FEED_IDS = {
  */
 export const HERMES_ENDPOINT = "https://hermes.pyth.network";
 
-/**
- * Create Pyth connection to Hermes
- * This client fetches price updates from Hermes API
- */
-export function createPythConnection() {
-  return new EvmPriceServiceConnection(HERMES_ENDPOINT, {
-    priceFeedRequestConfig: {
-      // Request binary price updates for on-chain submission
-      binary: true,
-    },
-  });
+interface PythPriceData {
+  price: string;
+  conf: string;
+  expo: number;
+  publish_time: number;
+}
+
+interface PythPriceFeed {
+  id: string;
+  price: PythPriceData;
+  ema_price: PythPriceData;
+}
+
+interface HermesLatestPriceResponse {
+  binary: {
+    encoding: string;
+    data: string[];
+  };
+  parsed: PythPriceFeed[];
 }
 
 /**
@@ -59,12 +65,16 @@ export function createPythConnection() {
  */
 export async function fetchPriceUpdates(priceIds: string[]): Promise<string[]> {
   try {
-    const connection = createPythConnection();
+    const idsParam = priceIds.map((id) => `ids[]=${id}`).join("&");
+    const url = `${HERMES_ENDPOINT}/v2/updates/price/latest?${idsParam}`;
 
-    // Get the latest price updates with proofs
-    const priceUpdateData = await connection.getPriceFeedsUpdateData(priceIds);
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Hermes API error: ${response.statusText}`);
+    }
 
-    return priceUpdateData;
+    const data: HermesLatestPriceResponse = await response.json();
+    return data.binary.data;
   } catch (error) {
     console.error("Failed to fetch price updates from Hermes:", error);
     throw error;
@@ -81,24 +91,32 @@ export async function fetchPriceUpdates(priceIds: string[]): Promise<string[]> {
  */
 export async function getLatestPrice(priceId: string) {
   try {
-    const connection = createPythConnection();
-    const priceFeeds = await connection.getLatestPriceFeeds([priceId]);
+    const url = `${HERMES_ENDPOINT}/v2/updates/price/latest?ids[]=${priceId}`;
 
-    if (!priceFeeds || priceFeeds.length === 0) {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Hermes API error: ${response.statusText}`);
+    }
+
+    const data: HermesLatestPriceResponse = await response.json();
+
+    if (!data.parsed || data.parsed.length === 0) {
       throw new Error("No price feed data available");
     }
 
-    const priceFeed = priceFeeds[0];
-    const price = priceFeed.getPriceNoOlderThan(60); // 60 seconds max age
+    const priceFeed = data.parsed[0];
+    const priceData = priceFeed.price;
 
-    if (!price) {
-      throw new Error("Price data is stale");
+    // Check if price is too old (more than 60 seconds)
+    const now = Math.floor(Date.now() / 1000);
+    if (now - priceData.publish_time > 60) {
+      console.warn("Price data is stale");
     }
 
     return {
-      price: Number(price.price) * Math.pow(10, price.expo),
-      conf: Number(price.conf) * Math.pow(10, price.expo),
-      publishTime: price.publishTime,
+      price: Number(priceData.price) * Math.pow(10, priceData.expo),
+      conf: Number(priceData.conf) * Math.pow(10, priceData.expo),
+      publishTime: priceData.publish_time,
     };
   } catch (error) {
     console.error("Failed to fetch Pyth price:", error);
@@ -125,22 +143,38 @@ export function subscribeToPriceUpdates(
     publishTime: number;
   }) => void
 ) {
-  const connection = createPythConnection();
+  const idsParam = priceIds.map((id) => `ids[]=${id}`).join("&");
+  const url = `${HERMES_ENDPOINT}/v2/updates/price/stream?${idsParam}`;
 
-  // Subscribe to price feed updates via SSE
-  connection.subscribePriceFeedUpdates(priceIds, (priceFeed) => {
-    const price = priceFeed.getPriceUnchecked();
-    callback({
-      priceId: priceFeed.id,
-      price: Number(price.price) * Math.pow(10, price.expo),
-      conf: Number(price.conf) * Math.pow(10, price.expo),
-      publishTime: price.publishTime,
-    });
-  });
+  const eventSource = new EventSource(url);
+
+  eventSource.onmessage = (event) => {
+    try {
+      const data: HermesLatestPriceResponse = JSON.parse(event.data);
+
+      if (data.parsed && data.parsed.length > 0) {
+        data.parsed.forEach((priceFeed) => {
+          const priceData = priceFeed.price;
+          callback({
+            priceId: priceFeed.id,
+            price: Number(priceData.price) * Math.pow(10, priceData.expo),
+            conf: Number(priceData.conf) * Math.pow(10, priceData.expo),
+            publishTime: priceData.publish_time,
+          });
+        });
+      }
+    } catch (error) {
+      console.error("Failed to parse SSE event:", error);
+    }
+  };
+
+  eventSource.onerror = (error) => {
+    console.error("SSE connection error:", error);
+  };
 
   // Return unsubscribe function
   return () => {
-    connection.closeWebSocket();
+    eventSource.close();
   };
 }
 
@@ -168,7 +202,7 @@ export async function getPYUSDPrice() {
     return {
       price: 1.0,
       conf: 0.001,
-      publishTime: Date.now(),
+      publishTime: Math.floor(Date.now() / 1000),
     };
 
     // Uncomment when Pyth price feed ID is available:
@@ -179,7 +213,7 @@ export async function getPYUSDPrice() {
     return {
       price: 1.0,
       conf: 0.001,
-      publishTime: Date.now(),
+      publishTime: Math.floor(Date.now() / 1000),
     };
   }
 }
@@ -214,16 +248,23 @@ export async function getBTCPrice() {
  */
 export async function fetchMultiplePriceUpdates(priceIds: string[]) {
   try {
-    const connection = createPythConnection();
-    const priceFeeds = await connection.getLatestPriceFeeds(priceIds);
+    const idsParam = priceIds.map((id) => `ids[]=${id}`).join("&");
+    const url = `${HERMES_ENDPOINT}/v2/updates/price/latest?${idsParam}`;
 
-    return priceFeeds.map(feed => {
-      const price = feed.getPriceUnchecked();
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Hermes API error: ${response.statusText}`);
+    }
+
+    const data: HermesLatestPriceResponse = await response.json();
+
+    return data.parsed.map((feed) => {
+      const priceData = feed.price;
       return {
         id: feed.id,
-        price: Number(price.price) * Math.pow(10, price.expo),
-        conf: Number(price.conf) * Math.pow(10, price.expo),
-        publishTime: price.publishTime,
+        price: Number(priceData.price) * Math.pow(10, priceData.expo),
+        conf: Number(priceData.conf) * Math.pow(10, priceData.expo),
+        publishTime: priceData.publish_time,
       };
     });
   } catch (error) {
